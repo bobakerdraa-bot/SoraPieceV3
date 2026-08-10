@@ -1,4 +1,1 @@
-﻿SoraPiece loadstring usage
-Use your GitHub raw URL from https://github.com/bobakerdraa-bot/SoraPieceV2
-Example:
-loadstring(game:HttpGet("https://raw.githubusercontent.com/bobakerdraa-bot/SoraPieceV2/main/SoraPiece.lua", true))()
+﻿loadstring(game:HttpGet("https://raw.githubusercontent.com/bobakerdraa-bot/SoraPieceV2/main/SoraPiece.lua"))()
