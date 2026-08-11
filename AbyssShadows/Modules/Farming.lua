@@ -14,12 +14,6 @@ Farming.Connections = {}
 Farming.Running = false
 Farming.CurrentTarget = nil
 
-local function safeDestroy(instance)
-    if instance and instance.Destroy then
-        instance:Destroy()
-    end
-end
-
 local function compareTargets(a, b, root)
     local distA = math.huge
     local distB = math.huge
@@ -118,7 +112,6 @@ end
 function Farming:Refresh()
     Scanner:ScanNpcs()
     Scanner:ScanChests()
-    DataManager:UpdateStat("NPCCount", #Scanner.NPCCache)
     return Scanner.NPCCache, Scanner.ChestCache
 end
 

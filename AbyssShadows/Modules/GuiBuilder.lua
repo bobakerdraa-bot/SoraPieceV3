@@ -2,7 +2,6 @@
 -- Builds a polished Rayfield UI for Abyss Shadows.
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 
 local Constants = require(script.Parent.Constants)
 local Utils = require(script.Parent.Utils)
@@ -25,18 +24,28 @@ local function buildMetrics()
         { Title = "Status", Value = DataManager.State.Status },
         { Title = "NPCs", Value = #Scanner.NPCCache },
         { Title = "Chests", Value = #Scanner.ChestCache },
-        { Title = "Gems", Value = DataManager.State.CurrentGems },
-        { Title = "Coins", Value = DataManager.State.CurrentCoins },
-        { Title = "EXP", Value = DataManager.State.CurrentEXP },
+        { Title = "Session Gems", Value = DataManager.State.SessionGems },
+        { Title = "Gems / Min", Value = math.floor(DataManager.State.GemsPerMinute) },
     }
 end
 
 function GuiBuilder:Build()
-    local rayfieldSource = Utils.SafeHttpGet(Constants.RayfieldUrl)
+    local rayfieldSource = Utils.SafeHttpGetAny(Constants.RayfieldUrls or {Constants.RayfieldUrl})
     if not rayfieldSource or rayfieldSource == "" then
-        error("[AbyssShadows] Failed to download Rayfield UI from " .. tostring(Constants.RayfieldUrl))
+        error("[AbyssShadows] Failed to download Rayfield UI from any configured URL.")
     end
-    local Rayfield = loadstring(rayfieldSource)()
+
+    local Rayfield, loadError = Utils.SafeLoadString(rayfieldSource, Constants.RayfieldUrl)
+    if not Rayfield then
+        error("[AbyssShadows] Failed to load Rayfield UI: " .. tostring(loadError))
+    end
+
+    if type(Rayfield) == "function" then
+        Rayfield = Rayfield()
+    end
+    if type(Rayfield) ~= "table" then
+        error("[AbyssShadows] Rayfield loader returned invalid library type.")
+    end
 
     local Window = Rayfield:CreateWindow({
         Name = "Abyss Shadows",
@@ -110,7 +119,7 @@ function GuiBuilder:Build()
     farmSection:CreateDropdown({
         Name = "Target Priority",
         Options = Constants.TargetPriorities,
-        CurrentOption = Constants.TargetPriorities[1],
+        CurrentOption = Constants.Defaults.TargetPriority,
         Flag = "TargetPriority",
         Callback = function(option)
             Constants.Defaults.TargetPriority = option
@@ -251,16 +260,9 @@ function GuiBuilder:Build()
             Rayfield:Notify({ Title = "Debug", Content = "Printed detected objects.", Duration = 3 })
         end,
     })
-    debugSection:CreateToggle({
-        Name = "Enable Debug Logging",
-        CurrentValue = DataManager.State.DebugLogging,
-        Flag = "DebugLogging",
-        Callback = function(enabled)
-            DataManager.State.DebugLogging = enabled
-        end,
-    })
 
     Rayfield:LoadConfiguration()
+    Window.Flags = Window.Flags or {}
 
     local function syncSavedSettings()
         local flags = Window.Flags or {}

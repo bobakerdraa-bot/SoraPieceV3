@@ -56,6 +56,7 @@ function ChestManager:Start()
     Scanner:ScanChests()
     self.Running = true
     self.CurrentChest = nil
+    DataManager:Log("ChestManager started")
     local connection = RunService.Heartbeat:Connect(function()
         if not self.Running then
             return
@@ -87,6 +88,7 @@ end
 function ChestManager:Stop()
     self.Running = false
     DataManager:UpdateStat("ChestTarget", "None")
+    DataManager:Log("ChestManager stopped")
     for _, conn in ipairs(self.Connections) do
         if conn.Connected then
             conn:Disconnect()

@@ -4,19 +4,15 @@
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+local DataManager = require(script.Parent.DataManager)
 
 local Scanner = {}
 Scanner.NPCCache = {}
 Scanner.ChestCache = {}
-Scanner.LocationCache = {}
+Scanner.GemCache = {}
 Scanner.Connections = {}
-
-local function safeFindFirstChild(root, name)
-    if not root or not root.FindFirstChild then
-        return nil
-    end
-    return root:FindFirstChild(name)
-end
 
 local function gatherNpcInfo(model)
     if not model or not model:IsA("Model") then
@@ -58,7 +54,10 @@ end
 function Scanner:ScanNpcs()
     self.NPCCache = {}
     local candidates = scanWorkspaceFor(function(descendant)
-        return descendant:IsA("Model") and descendant:FindFirstChildOfClass("Humanoid")
+        if not descendant:IsA("Model") or not descendant:FindFirstChildOfClass("Humanoid") then
+            return false
+        end
+        return not Players:GetPlayerFromCharacter(descendant)
     end)
     for _, model in ipairs(candidates) do
         local info = gatherNpcInfo(model)
@@ -66,6 +65,7 @@ function Scanner:ScanNpcs()
             table.insert(self.NPCCache, info)
         end
     end
+    DataManager:Log("ScanNpcs found", #self.NPCCache, "NPCs")
     return self.NPCCache
 end
 
@@ -81,6 +81,7 @@ function Scanner:ScanChests()
     for _, chest in ipairs(candidates) do
         table.insert(self.ChestCache, chest)
     end
+    DataManager:Log("ScanChests found", #self.ChestCache, "chests")
     return self.ChestCache
 end
 
@@ -96,6 +97,7 @@ function Scanner:ScanGems()
     for _, gem in ipairs(candidates) do
         table.insert(self.GemCache, gem)
     end
+    DataManager:Log("ScanGems found", #self.GemCache, "gems")
     return self.GemCache
 end
 

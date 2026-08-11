@@ -1,6 +1,6 @@
 # Abyss Shadows Rayfield UI
 
-A polished Roblox Rayfield GUI loader and farming tool for `SoraPiece`.
+A polished Roblox Rayfield GUI loader and farming tool for `AbyssShadows`.
 
 ## Structure
 
@@ -14,26 +14,12 @@ A polished Roblox Rayfield GUI loader and farming tool for `SoraPiece`.
 
 ## Usage
 
-1. Put `AbyssShadows` together with `SoraPiece.lua` in the same Roblox game.
-2. Run `Main.lua` from a LocalScript.
-3. Use the Rayfield UI to start farming and inspect detected NPCs/chests.
-## Recommended loader
+1. Place the `AbyssShadows` folder into your Roblox game's `StarterPlayerScripts`, `StarterGui`, or `ReplicatedStorage`.
+2. Run `Main.lua` as a LocalScript inside the `AbyssShadows` folder.
+3. Use the Rayfield UI to start farming and inspect detected NPCs, chests, and gems.
 
-`AbyssShadows` already contains a fallback loader in `AbyssShadows/Modules/Constants.lua`.
-If you need a direct executor URL, use:
+## Notes
 
-- `https://raw.githack.com/bobakerdraa-bot/SoraPieceV3/main/SoraPiece_link.lua`
-
-If your executor supports CDNs, this is also a good fallback:
-
-- `https://cdn.jsdelivr.net/gh/bobakerdraa-bot/SoraPieceV3@main/SoraPiece_link.lua`
-
-If raw GitHub is blocked, `raw.githack.com` is the recommended first choice.
-
-### Recommended executor loader
-
-Use this one-liner in your executor:
-
-```lua
-loadstring(game:HttpGet("https://raw.githack.com/bobakerdraa-bot/SoraPieceV3/main/SoraPiece_link.lua", true))()
-```
+- `AbyssShadows` includes internal Rayfield fallback URLs in `AbyssShadows/Modules/Constants.lua`.
+- You do not need an external loader file; run `Main.lua` directly from the `AbyssShadows` folder.
+- Ensure HTTP access is enabled in your executor so the Rayfield UI library can be downloaded.

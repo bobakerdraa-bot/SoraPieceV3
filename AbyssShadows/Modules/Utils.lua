@@ -6,27 +6,68 @@ local HttpService = game:GetService("HttpService")
 local Utils = {}
 
 function Utils.SafeHttpGet(url)
-    if type(game.HttpGet) == "function" then
-        return game:HttpGet(url, true)
+    local function try(fn, ...)
+        if type(fn) ~= "function" then
+            return nil
+        end
+        local ok, result = pcall(fn, ...)
+        if not ok then
+            return nil
+        end
+        return result
     end
-    if type(game.HttpGetAsync) == "function" then
-        return game:HttpGetAsync(url, true)
+
+    local requesters = {
+        function()
+            return try(game.HttpGet, game, url, true)
+        end,
+        function()
+            return try(game.HttpGetAsync, game, url, true)
+        end,
+        function()
+            if type(syn) == "table" and type(syn.request) == "function" then
+                return try(function()
+                    return syn.request({Url = url, Method = "GET"}).Body
+                end)
+            end
+        end,
+        function()
+            if type(request) == "function" then
+                return try(function()
+                    return request({Url = url, Method = "GET"}).Body
+                end)
+            end
+        end,
+        function()
+            if type(http_request) == "function" then
+                return try(function()
+                    return http_request({Url = url, Method = "GET"}).Body
+                end)
+            end
+        end,
+        function()
+            if type(httprequest) == "function" then
+                return try(function()
+                    return httprequest({Url = url, Method = "GET"}).Body
+                end)
+            end
+        end,
+        function()
+            if HttpService and type(HttpService.GetAsync) == "function" then
+                return try(function()
+                    return HttpService:GetAsync(url)
+                end)
+            end
+        end,
+    }
+
+    for _, requester in ipairs(requesters) do
+        local result = requester()
+        if result and result ~= "" then
+            return result
+        end
     end
-    if type(syn) == "table" and type(syn.request) == "function" then
-        return syn.request({Url = url, Method = "GET"}).Body
-    end
-    if type(request) == "function" then
-        return request({Url = url, Method = "GET"}).Body
-    end
-    if type(http_request) == "function" then
-        return http_request({Url = url, Method = "GET"}).Body
-    end
-    if type(httprequest) == "function" then
-        return httprequest({Url = url, Method = "GET"}).Body
-    end
-    if HttpService and type(HttpService.GetAsync) == "function" then
-        return HttpService:GetAsync(url)
-    end
+
     return nil
 end
 
@@ -43,25 +84,20 @@ function Utils.SafeHttpGetAny(urls)
     return nil
 end
 
-function Utils.SanitizeText(value)
-    return tostring(value or "-")
-end
-
-function Utils.CreateStatusIcon(parent, isActive)
-    local dot = Instance.new("Frame")
-    dot.Size = UDim2.new(0, 10, 0, 10)
-    dot.BackgroundTransparency = 0
-    dot.BorderSizePixel = 0
-    dot.AnchorPoint = Vector2.new(0, 0.5)
-    dot.Position = UDim2.new(0, 0, 0.5, 0)
-    dot.BackgroundColor3 = isActive and Color3.fromRGB(102, 255, 178) or Color3.fromRGB(197, 59, 59)
-    dot.Rotation = 0
-    dot.ClipsDescendants = false
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(1, 0)
-    corner.Parent = dot
-    dot.Parent = parent
-    return dot
+function Utils.SafeLoadString(code, source)
+    local loader = loadstring or load
+    if type(loader) ~= "function" then
+        return nil, "no loadstring/load available"
+    end
+    local chunk, err = loader(code, source or "chunk")
+    if not chunk then
+        return nil, err
+    end
+    local ok, result = pcall(chunk)
+    if not ok then
+        return nil, result
+    end
+    return result
 end
 
 return Utils

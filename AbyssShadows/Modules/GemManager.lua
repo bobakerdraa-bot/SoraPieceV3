@@ -11,6 +11,7 @@ local Constants = require(script.Parent.Constants)
 local GemManager = {}
 GemManager.Running = false
 GemManager.Connections = {}
+GemManager.LastGemTarget = nil
 
 local function findNearbyGem(range)
     local player = Players.LocalPlayer
@@ -41,6 +42,7 @@ function GemManager:Start()
     end
     Scanner:ScanGems()
     self.Running = true
+    DataManager:Log("GemManager started")
     local connection = RunService.Heartbeat:Connect(function()
         if not self.Running then
             return
@@ -50,12 +52,12 @@ function GemManager:Start()
         end
         local gem = findNearbyGem(Constants.Defaults.GemRange)
         if gem then
-            DataManager:IncrementStat("SessionGems", 1)
-            local now = tick()
-            if DataManager.State.LastGemTick == 0 then
-                DataManager.State.LastGemTick = now
+            if self.LastGemTarget ~= gem then
+                DataManager:IncrementStat("SessionGems", 1)
+                self.LastGemTarget = gem
+                DataManager.State.LastGemTick = tick()
             end
-            local elapsed = math.max(1, now - DataManager.State.LastGemTick)
+            local elapsed = math.max(1, tick() - DataManager.State.LastGemTick)
             DataManager:UpdateStat("GemsPerMinute", DataManager.State.SessionGems / (elapsed / 60))
             DataManager:UpdateStat("Status", "Collecting gem")
             if gem:IsA("BasePart") then
@@ -64,6 +66,9 @@ function GemManager:Start()
                     player.Character:FindFirstChildOfClass("Humanoid"):MoveTo(gem.Position)
                 end
             end
+        else
+            self.LastGemTarget = nil
+            DataManager:Log("No nearby gem found")
         end
     end)
     table.insert(self.Connections, connection)
