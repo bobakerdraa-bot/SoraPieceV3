@@ -21,7 +21,7 @@ local function getAbyssRoot()
     return nil
 end
 
-local root = findModulesRoot()
+local root = getAbyssRoot()
 if not root then
     error("[AbyssShadows] Unable to locate the AbyssShadows root. Ensure the module folder is available in ReplicatedStorage or alongside Main.lua.")
 end
