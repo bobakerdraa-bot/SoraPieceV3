@@ -1,52 +1,38 @@
 -- Main.lua
 -- Entry point for Abyss Shadows.
 
-local function findModulesRoot()
-    local function hasModulesFolder(instance)
-        if not instance then
-            return false
-        end
-        local ok, child = pcall(function()
-            return instance:FindFirstChild("Modules")
-        end)
-        return ok and child
+local function getAbyssRoot()
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local root = ReplicatedStorage:FindFirstChild("AbyssShadows")
+    if root and root:FindFirstChild("Modules") then
+        return root
     end
 
     if script then
-        local root = script.Parent
-        while root do
-            if hasModulesFolder(root) then
-                return root
+        local current = script.Parent
+        while current do
+            if current:FindFirstChild("Modules") then
+                return current
             end
-            root = root.Parent
+            current = current.Parent
         end
     end
 
-    local searchContainers = {
-        game:GetService("Workspace"),
-        game:GetService("ReplicatedStorage"),
-        game:GetService("StarterPlayer"),
-        game:GetService("StarterGui"),
-        game:GetService("ServerStorage"),
-    }
-    for _, container in ipairs(searchContainers) do
-        for _, child in ipairs(container:GetDescendants()) do
-            if child:IsA("Folder") and child.Name == "AbyssShadows" and child:FindFirstChild("Modules") then
-                return child
-            end
-        end
-    end
     return nil
 end
 
 local root = findModulesRoot()
 if not root then
-    error("[AbyssShadows] Unable to locate the Modules folder. Make sure Main.lua is a LocalScript inside AbyssShadows or the AbyssShadows folder exists in the game.")
+    error("[AbyssShadows] Unable to locate the AbyssShadows root. Ensure the module folder is available in ReplicatedStorage or alongside Main.lua.")
 end
 
 local Modules = root:FindFirstChild("Modules")
-local GuiBuilder = require(Modules.GuiBuilder)
-local Scanner = require(Modules.Scanner)
+if not Modules then
+    error("[AbyssShadows] Modules folder not found under AbyssShadows.")
+end
+
+local GuiBuilder = require(Modules:FindFirstChild("GuiBuilder") or error("GuiBuilder module missing"))
+local Scanner = require(Modules:FindFirstChild("Scanner") or error("Scanner module missing"))
 
 Scanner:StartAutoRefresh()
 GuiBuilder:Build()
