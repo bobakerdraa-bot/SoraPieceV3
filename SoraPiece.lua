@@ -69,22 +69,27 @@ end
 
 -- Simple owner-only GUI for toggling features and showing status
 local gui
-local function makeToggle(labelText, initial, onToggle)
+local function makeToggle(labelText, getStateFn, onToggle)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 140, 0, 28)
-    btn.BackgroundColor3 = initial and Color3.fromRGB(64,160,64) or Color3.fromRGB(160,64,64)
     btn.TextColor3 = Color3.new(1,1,1)
     btn.Font = Enum.Font.SourceSansBold
     btn.TextSize = 14
-    btn.Text = labelText .. (initial and " : ON" or " : OFF")
     btn.AutoButtonColor = true
+    local function refresh()
+        local state = getStateFn()
+        btn.BackgroundColor3 = state and Color3.fromRGB(64,160,64) or Color3.fromRGB(160,64,64)
+        btn.Text = labelText .. (state and " : ON" or " : OFF")
+    end
     btn.MouseButton1Click:Connect(function()
-        local ok, new = pcall(function() return not initial end)
-        initial = not initial
-        btn.BackgroundColor3 = initial and Color3.fromRGB(64,160,64) or Color3.fromRGB(160,64,64)
-        btn.Text = labelText .. (initial and " : ON" or " : OFF")
-        pcall(onToggle, initial)
+        local ok, err = pcall(function()
+            local newVal = not getStateFn()
+            onToggle(newVal)
+        end)
+        if not ok and settings.debug then warn("[SoraPiece] toggle error:", err) end
+        refresh()
     end)
+    refresh()
     return btn
 end
 
@@ -122,35 +127,62 @@ local function createGui()
     end
 
     -- Master enable toggle (owner only)
-    local master = makeToggle("Automation", settings.enabled, function(val)
-        settings.enabled = val
-    end)
+    local master = makeToggle("Automation",
+        function() return settings.enabled end,
+        function(val) settings.enabled = val end)
     addRow(master)
 
-    local t1 = makeToggle("AutoFarm", settings.autoFarm, function(v) settings.autoFarm = v end)
+    local t1 = makeToggle("AutoFarm",
+        function() return settings.autoFarm end,
+        function(v) settings.autoFarm = v end)
     addRow(t1)
-    local t2 = makeToggle("AutoBoss", settings.autoBoss, function(v) settings.autoBoss = v end)
+    local t2 = makeToggle("AutoBoss",
+        function() return settings.autoBoss end,
+        function(v) settings.autoBoss = v end)
     addRow(t2)
-    local t3 = makeToggle("AutoGems", settings.autoGems, function(v) settings.autoGems = v end)
+    local t3 = makeToggle("AutoGems",
+        function() return settings.autoGems end,
+        function(v) settings.autoGems = v end)
     addRow(t3)
-    local t4 = makeToggle("AutoChests", settings.autoChests, function(v) settings.autoChests = v end)
+    local t4 = makeToggle("AutoChests",
+        function() return settings.autoChests end,
+        function(v) settings.autoChests = v end)
     addRow(t4)
-    local t5 = makeToggle("AutoQuest", settings.autoQuest, function(v) settings.autoQuest = v end)
+    local t5 = makeToggle("AutoQuest",
+        function() return settings.autoQuest end,
+        function(v) settings.autoQuest = v end)
     addRow(t5)
-    local t6 = makeToggle("AutoTeleport", settings.autoTeleport, function(v) settings.autoTeleport = v end)
+    local t6 = makeToggle("AutoTeleport",
+        function() return settings.autoTeleport end,
+        function(v) settings.autoTeleport = v end)
     addRow(t6)
 
     local info = Instance.new("TextLabel")
-    info.Size = UDim2.new(1, -8, 0, 28)
+    info.Size = UDim2.new(1, -8, 0, 56)
     info.Position = UDim2.new(0, 8, 0, y)
     info.BackgroundTransparency = 1
     info.TextColor3 = Color3.new(1,0.85,0.2)
-    info.Text = "Owner: " .. tostring(isOwner() and player.Name or "No")
+    info.Text = "Owner: " .. tostring(isOwner() and player.Name or "No") .. "\nStatus: initializing..."
     info.Font = Enum.Font.SourceSans
     info.TextSize = 14
     info.TextXAlignment = Enum.TextXAlignment.Left
+    info.TextYAlignment = Enum.TextYAlignment.Top
     info.Parent = frame
-    y = y + 34
+    y = y + 64
+
+    -- Update status periodically
+    spawn(function()
+        while screenGui.Parent do
+            local s = string.format("Owner: %s\nTargets: E=%d B=%d G=%d C=%d Q=%d\nRemotes: atk=%s int=%s q=%s",
+                isOwner() and player.Name or "No",
+                #cache.targets.enemies, #cache.targets.bosses, #cache.targets.gems, #cache.targets.chests, #cache.targets.quest,
+                cache.remotes.attack and cache.remotes.attack.Name or "-",
+                cache.remotes.interact and cache.remotes.interact.Name or "-",
+                cache.remotes.quest and cache.remotes.quest.Name or "-")
+            info.Text = s
+            task.wait(3)
+        end
+    end)
 
     gui = screenGui
     return gui
