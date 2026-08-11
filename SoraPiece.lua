@@ -188,11 +188,6 @@ local function createGui()
     return gui
 end
 
--- Only create GUI for owners
-if isOwner() then
-    createGui()
-end
-
 local cache = {
     lastScan = 0,
     remotes = { attack = nil, interact = nil, quest = nil },
@@ -200,6 +195,11 @@ local cache = {
     lastAction = 0,
     actionTimes = {},
 }
+
+-- Only create GUI for owners after cache exists
+if isOwner() then
+    createGui()
+end
 
 local keywords = {
     attack = {"attack", "atk", "hit", "damage", "combat", "fight", "skill", "slash", "punch", "strike"},
@@ -239,6 +239,8 @@ local function safeCall(fn, ...)
     end
     return ok, result
 end
+
+print("[SoraPiece] script loaded, owner=" .. tostring(isOwner()))
 
 local function refreshCharacter()
     character = player.Character or player.CharacterAdded:Wait()
@@ -441,7 +443,6 @@ local function moveTo(position)
         safeCall(function()
             rootPart.CFrame = CFrame.new(targetPos)
         end)
-    end
     end
 end
 
