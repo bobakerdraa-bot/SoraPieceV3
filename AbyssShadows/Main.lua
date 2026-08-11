@@ -3,10 +3,16 @@
 
 local function findModulesRoot()
     local function hasModulesFolder(instance)
-        return instance and type(instance.FindFirstChild) == "function" and instance:FindFirstChild("Modules")
+        if not instance then
+            return false
+        end
+        local ok, child = pcall(function()
+            return instance:FindFirstChild("Modules")
+        end)
+        return ok and child
     end
 
-    if script and type(script) ~= "nil" then
+    if script then
         local root = script.Parent
         while root do
             if hasModulesFolder(root) then
