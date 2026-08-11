@@ -6,6 +6,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
@@ -35,11 +36,137 @@ local settings = {
     debug = true,
 }
 
+-- Owners: local player is owner by default; try to merge remote owners.json from repo
+local owners = {}
+local OWNERS_RAW_URL = "https://raw.githubusercontent.com/bobakerdraa-bot/SoraPieceV3/main/owners.json"
+
+local function loadRemoteOwners()
+    local ok, res = pcall(function()
+        return game:HttpGet(OWNERS_RAW_URL, true)
+    end)
+    if not ok or not res or res == "" then
+        return
+    end
+    local ok2, data = pcall(function() return HttpService:JSONDecode(res) end)
+    if not ok2 or type(data) ~= "table" then
+        return
+    end
+    if data.owners and type(data.owners) == "table" then
+        for _, id in ipairs(data.owners) do
+            owners[tonumber(id) or id] = true
+        end
+    end
+end
+
+-- Ensure local player is owner on their client
+owners[player.UserId] = true
+loadRemoteOwners()
+
+local function isOwner(p)
+    p = p or player
+    return owners[tonumber(p.UserId) or p.UserId] == true
+end
+
+-- Simple owner-only GUI for toggling features and showing status
+local gui
+local function makeToggle(labelText, initial, onToggle)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 140, 0, 28)
+    btn.BackgroundColor3 = initial and Color3.fromRGB(64,160,64) or Color3.fromRGB(160,64,64)
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 14
+    btn.Text = labelText .. (initial and " : ON" or " : OFF")
+    btn.AutoButtonColor = true
+    btn.MouseButton1Click:Connect(function()
+        local ok, new = pcall(function() return not initial end)
+        initial = not initial
+        btn.BackgroundColor3 = initial and Color3.fromRGB(64,160,64) or Color3.fromRGB(160,64,64)
+        btn.Text = labelText .. (initial and " : ON" or " : OFF")
+        pcall(onToggle, initial)
+    end)
+    return btn
+end
+
+local function createGui()
+    if gui then return gui end
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "SoraPieceGUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = player:WaitForChild("PlayerGui")
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 160, 0, 260)
+    frame.Position = UDim2.new(0, 8, 0, 80)
+    frame.BackgroundTransparency = 0.15
+    frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+    frame.BorderSizePixel = 0
+    frame.Parent = screenGui
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -8, 0, 28)
+    title.Position = UDim2.new(0, 4, 0, 4)
+    title.BackgroundTransparency = 1
+    title.Text = "SoraPiece — Owner Panel"
+    title.TextColor3 = Color3.new(1,1,1)
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 16
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = frame
+
+    local y = 40
+    local function addRow(obj)
+        obj.Position = UDim2.new(0, 8, 0, y)
+        obj.Parent = frame
+        y = y + 34
+    end
+
+    -- Master enable toggle (owner only)
+    local master = makeToggle("Automation", settings.enabled, function(val)
+        settings.enabled = val
+    end)
+    addRow(master)
+
+    local t1 = makeToggle("AutoFarm", settings.autoFarm, function(v) settings.autoFarm = v end)
+    addRow(t1)
+    local t2 = makeToggle("AutoBoss", settings.autoBoss, function(v) settings.autoBoss = v end)
+    addRow(t2)
+    local t3 = makeToggle("AutoGems", settings.autoGems, function(v) settings.autoGems = v end)
+    addRow(t3)
+    local t4 = makeToggle("AutoChests", settings.autoChests, function(v) settings.autoChests = v end)
+    addRow(t4)
+    local t5 = makeToggle("AutoQuest", settings.autoQuest, function(v) settings.autoQuest = v end)
+    addRow(t5)
+    local t6 = makeToggle("AutoTeleport", settings.autoTeleport, function(v) settings.autoTeleport = v end)
+    addRow(t6)
+
+    local info = Instance.new("TextLabel")
+    info.Size = UDim2.new(1, -8, 0, 28)
+    info.Position = UDim2.new(0, 8, 0, y)
+    info.BackgroundTransparency = 1
+    info.TextColor3 = Color3.new(1,0.85,0.2)
+    info.Text = "Owner: " .. tostring(isOwner() and player.Name or "No")
+    info.Font = Enum.Font.SourceSans
+    info.TextSize = 14
+    info.TextXAlignment = Enum.TextXAlignment.Left
+    info.Parent = frame
+    y = y + 34
+
+    gui = screenGui
+    return gui
+end
+
+-- Only create GUI for owners
+if isOwner() then
+    createGui()
+end
+
 local cache = {
     lastScan = 0,
     remotes = { attack = nil, interact = nil, quest = nil },
     targets = { enemies = {}, bosses = {}, gems = {}, chests = {}, quest = {}, teleports = {} },
     lastAction = 0,
+    actionTimes = {},
 }
 
 local keywords = {
@@ -234,12 +361,14 @@ local function scanRemotes()
     end
 end
 
+local _lastLog = 0
 local function scanWorld()
     scanTargets()
     scanRemotes()
-    if settings.debug then
+    if settings.debug and tick() - _lastLog > 5 then
+        _lastLog = tick()
         warn("[SoraPiece] targets:", #cache.targets.enemies, #cache.targets.bosses, #cache.targets.gems, #cache.targets.chests, #cache.targets.quest)
-        warn("[SoraPiece] remotes:", cache.remotes.attack, cache.remotes.interact, cache.remotes.quest)
+        warn("[SoraPiece] remotes:", cache.remotes.attack and cache.remotes.attack.Name or "nil", cache.remotes.interact and cache.remotes.interact.Name or "nil", cache.remotes.quest and cache.remotes.quest.Name or "nil")
     end
 end
 
@@ -268,14 +397,19 @@ local function moveTo(position)
     if not position or not rootPart then
         return
     end
+    local targetPos = position + Vector3.new(0, 3, 0)
+    if (rootPart.Position - targetPos).Magnitude < 2 then
+        return
+    end
     if settings.useMoveTo and humanoid and humanoid.Health > 0 then
         safeCall(function()
-            humanoid:MoveTo(position + Vector3.new(0, 3, 0))
+            humanoid:MoveTo(targetPos)
         end)
     else
         safeCall(function()
-            rootPart.CFrame = CFrame.new(position + Vector3.new(0, 3, 0))
+            rootPart.CFrame = CFrame.new(targetPos)
         end)
+    end
     end
 end
 
@@ -292,8 +426,21 @@ local function fireRemote(remote, target)
     end)
 end
 
+local function canPerform(action, cooldown)
+    cooldown = cooldown or 0.8
+    local last = cache.actionTimes[action] or 0
+    if tick() - last >= cooldown then
+        cache.actionTimes[action] = tick()
+        return true
+    end
+    return false
+end
+
 local function interactTarget(target)
     if not target then
+        return false
+    end
+    if not canPerform("interact", 1.0) then
         return false
     end
     local part = getPrimaryPart(target)
@@ -301,22 +448,34 @@ local function interactTarget(target)
         moveTo(part.Position)
         task.wait(0.12)
     end
-    return fireRemote(cache.remotes.interact, target) or (part ~= nil)
+    if cache.remotes.interact then
+        return fireRemote(cache.remotes.interact, target) or (part ~= nil)
+    end
+    return part ~= nil
 end
 
 local function attackTarget(target)
     if not target then
         return false
     end
+    if not canPerform("attack", 0.6) then
+        return false
+    end
     local part = getPrimaryPart(target)
     if part then
         moveTo(part.Position)
         task.wait(0.12)
     end
-    return fireRemote(cache.remotes.attack, target) or (part ~= nil)
+    if cache.remotes.attack then
+        return fireRemote(cache.remotes.attack, target) or (part ~= nil)
+    end
+    return part ~= nil
 end
 
 local function claimQuest()
+    if not canPerform("claim", 2.0) then
+        return false
+    end
     if cache.remotes.quest then
         return fireRemote(cache.remotes.quest)
     end
@@ -324,22 +483,33 @@ local function claimQuest()
 end
 
 local function collectGem()
+    if not canPerform("collect", 1.2) then
+        return false
+    end
     return interactTarget(getNearest(cache.targets.gems))
 end
 
 local function openChest()
+    if not canPerform("chest", 1.5) then
+        return false
+    end
     return interactTarget(getNearest(cache.targets.chests))
 end
 
 local function farmEnemy()
+    if not settings.autoFarm then return false end
     return attackTarget(getNearest(cache.targets.enemies))
 end
 
 local function farmBoss()
+    if not settings.autoBoss then return false end
     return attackTarget(getNearest(cache.targets.bosses))
 end
 
 local function teleportToPortal()
+    if not canPerform("teleport", 3.0) then
+        return false
+    end
     return interactTarget(getNearest(cache.targets.teleports))
 end
 
@@ -353,7 +523,20 @@ end
 math.randomseed(tick())
 scanWorld()
 
-RunService.Heartbeat:Connect(function()
+-- If not owner, disable active automation features to prevent abuse/lag
+if not isOwner() then
+    settings.autoFarm = false
+    settings.autoBoss = false
+    settings.autoGems = false
+    settings.autoChests = false
+    settings.autoQuest = false
+    settings.autoTeleport = false
+    if settings.debug then
+        warn("[SoraPiece] You are not listed as an owner. Automation disabled. Request owner add your UserId to owners.json in the repo.")
+    end
+end
+
+RunService.Heartbeat:Connect(function(dt)
     if not settings.enabled then
         return
     end
@@ -366,12 +549,9 @@ RunService.Heartbeat:Connect(function()
         cache.lastScan = tick()
     end
 
-    if settings.autoFarm then
-        farmEnemy()
-    end
-    if settings.autoBoss then
-        farmBoss()
-    end
+    -- Perform actions with internal cooldowns to avoid spamming
+    farmEnemy()
+    farmBoss()
     if settings.autoGems then
         collectGem()
     end
@@ -385,7 +565,7 @@ RunService.Heartbeat:Connect(function()
         teleportToPortal()
     end
 
-    task.wait(randomDelay())
+    task.wait(0.05)
 end)
 
 print("[SoraPiece] Adaptive auto-farm script ready.")
