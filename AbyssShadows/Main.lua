@@ -1,17 +1,49 @@
 -- Main.lua
 -- Entry point for Abyss Shadows.
 
+local function safeGetService(name)
+    if type(game) == "table" or type(game) == "userdata" then
+        if type(game.GetService) == "function" then
+            local ok, service = pcall(game.GetService, game, name)
+            if ok and service then
+                return service
+            end
+        end
+    end
+    if type(workspace) == "table" or type(workspace) == "userdata" then
+        if name == "Workspace" then
+            return workspace
+        elseif name == "ReplicatedStorage" then
+            if type(workspace.FindFirstChild) == "function" then
+                return workspace:FindFirstChild("ReplicatedStorage")
+            end
+        end
+    end
+    return nil
+end
+
 local function getAbyssRoot()
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local root = ReplicatedStorage:FindFirstChild("AbyssShadows")
-    if root and root:FindFirstChild("Modules") then
-        return root
+    local ReplicatedStorage = safeGetService("ReplicatedStorage")
+    if ReplicatedStorage and type(ReplicatedStorage.FindFirstChild) == "function" then
+        local root = ReplicatedStorage:FindFirstChild("AbyssShadows")
+        if root and type(root.FindFirstChild) == "function" and root:FindFirstChild("Modules") then
+            return root
+        end
+    end
+
+    if type(workspace) == "table" or type(workspace) == "userdata" then
+        if type(workspace.FindFirstChild) == "function" then
+            local root = workspace:FindFirstChild("AbyssShadows")
+            if root and type(root.FindFirstChild) == "function" and root:FindFirstChild("Modules") then
+                return root
+            end
+        end
     end
 
     if script then
         local current = script.Parent
         while current do
-            if current:FindFirstChild("Modules") then
+            if type(current.FindFirstChild) == "function" and current:FindFirstChild("Modules") then
                 return current
             end
             current = current.Parent
