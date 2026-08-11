@@ -46,7 +46,7 @@ local function createFolder(parent, name)
     return folder
 end
 
-local commitHash = "1c1ab733692bc37e55cd49304824abb1af494cf2"
+local commitHash = "d2df3301586094991317c9aa6f30ba351d25cfce"
 local baseUrl = "https://raw.githubusercontent.com/bobakerdraa-bot/SoraPieceV3/" .. commitHash .. "/"
 local files = {
     "AbyssShadows/Modules/Constants.lua",
