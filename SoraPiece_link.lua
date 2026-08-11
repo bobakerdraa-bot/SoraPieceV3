@@ -32,8 +32,18 @@ local function safeRequest(url)
             return result
         end
     end
-
     return nil
+end
+
+local function createFolder(parent, name)
+    local folder = parent:FindFirstChild(name)
+    if folder and folder:IsA("Folder") then
+        return folder
+    end
+    folder = Instance.new("Folder")
+    folder.Name = name
+    folder.Parent = parent
+    return folder
 end
 
 local baseUrl = "https://raw.githubusercontent.com/bobakerdraa-bot/SoraPieceV3/main/"
@@ -48,19 +58,8 @@ local files = {
     "AbyssShadows/Modules/GuiBuilder.lua",
 }
 
-local abyssFolder = ReplicatedStorage:FindFirstChild("AbyssShadows")
-if not abyssFolder then
-    abyssFolder = Instance.new("Folder")
-    abyssFolder.Name = "AbyssShadows"
-    abyssFolder.Parent = ReplicatedStorage
-end
-
-local modulesFolder = abyssFolder:FindFirstChild("Modules")
-if not modulesFolder then
-    modulesFolder = Instance.new("Folder")
-    modulesFolder.Name = "Modules"
-    modulesFolder.Parent = abyssFolder
-end
+local abyssFolder = createFolder(ReplicatedStorage, "AbyssShadows")
+local modulesFolder = createFolder(abyssFolder, "Modules")
 
 for _, path in ipairs(files) do
     local fileName = path:match("([^/]+)%.lua$")
@@ -87,18 +86,34 @@ if not mainSource then
     error("[AbyssShadows Loader] Failed to fetch " .. mainUrl)
 end
 
-local mainScript = Instance.new("LocalScript")
-mainScript.Name = "AbyssShadowsMain"
-mainScript.Parent = abyssFolder
+local proxyScript = { Parent = abyssFolder }
+local env = setmetatable({ script = proxyScript, game = game, workspace = workspace, ReplicatedStorage = ReplicatedStorage, HttpService = HttpService }, { __index = _G })
 
-local env = setmetatable({ script = mainScript, game = game, workspace = workspace, ReplicatedStorage = ReplicatedStorage, HttpService = HttpService }, { __index = _G })
+local loader = loadstring or load
+if type(loader) ~= "function" then
+    error("[AbyssShadows Loader] No loadstring or load available.")
+end
 
-local chunk, err = loadstring(mainSource, mainUrl)
+local chunk, err = loader(mainSource, mainUrl)
 if not chunk then
     error("[AbyssShadows Loader] Failed to compile Main.lua: " .. tostring(err))
 end
 
-setfenv(chunk, env)
+if type(setfenv) == "function" then
+    setfenv(chunk, env)
+elseif type(debug) == "table" and type(debug.setupvalue) == "function" then
+    local i = 1
+    while true do
+        local name = debug.getupvalue(chunk, i)
+        if not name then break end
+        if name == "_ENV" then
+            debug.setupvalue(chunk, i, env)
+            break
+        end
+        i = i + 1
+    end
+end
+
 local ok, runErr = pcall(chunk)
 if not ok then
     error("[AbyssShadows Loader] Failed to execute Main.lua: " .. tostring(runErr))
