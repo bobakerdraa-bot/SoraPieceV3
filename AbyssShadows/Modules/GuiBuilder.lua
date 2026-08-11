@@ -17,6 +17,13 @@ local function formatLabel(name, value)
     return string.format("%s: %s", name, tostring(value or "Unknown"))
 end
 
+local function safeCall(fn, ...)
+    if type(fn) ~= "function" then
+        return false
+    end
+    return pcall(fn, ...)
+end
+
 local function buildMetrics()
     return {
         { Title = "Player", Value = Players.LocalPlayer and Players.LocalPlayer.Name or "Unknown" },
@@ -72,12 +79,20 @@ function GuiBuilder:Build()
     local scannerTab = Window:CreateTab("NPC Scanner")
     local debugTab = Window:CreateTab("Debug")
 
-    Scanner:ScanNpcs()
-    Scanner:ScanChests()
-    Scanner:ScanGems()
+    pcall(function()
+        Scanner:ScanNpcs()
+    end)
+    pcall(function()
+        Scanner:ScanChests()
+    end)
+    pcall(function()
+        Scanner:ScanGems()
+    end)
 
     local overviewSection = homeTab:CreateSection("Overview")
-    for _, metric in ipairs(buildMetrics()) do
+    local success, metrics = pcall(buildMetrics)
+    metrics = success and metrics or {}
+    for _, metric in ipairs(metrics) do
         overviewSection:CreateLabel({
             Name = formatLabel(metric.Title, metric.Value),
         })
@@ -273,15 +288,21 @@ function GuiBuilder:Build()
         Constants.Defaults.ChestRange = flags.ChestRange or Constants.Defaults.ChestRange
         Constants.Defaults.AutoGems = flags.AutoCollectGems or Constants.Defaults.AutoGems
 
-        if Constants.Defaults.AutoFarm then
-            Farming:Start()
-        end
-        if Constants.Defaults.AutoChests then
-            ChestManager:Start()
-        end
-        if Constants.Defaults.AutoGems then
-            GemManager:Start()
-        end
+        pcall(function()
+            if Constants.Defaults.AutoFarm then
+                Farming:Start()
+            end
+        end)
+        pcall(function()
+            if Constants.Defaults.AutoChests then
+                ChestManager:Start()
+            end
+        end)
+        pcall(function()
+            if Constants.Defaults.AutoGems then
+                GemManager:Start()
+            end
+        end)
     end
 
     syncSavedSettings()
