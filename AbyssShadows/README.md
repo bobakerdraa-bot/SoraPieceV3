@@ -21,10 +21,10 @@ A polished Roblox Rayfield GUI loader and farming tool for `AbyssShadows`.
 ## Notes
 
 - `AbyssShadows` includes internal Rayfield fallback URLs in `AbyssShadows/Modules/Constants.lua`.
-- You can load the full project directly with the following one-liner:
+- You can load the full project directly with the following pinned one-liner:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/bobakerdraa-bot/SoraPieceV3/main/SoraPiece_link.lua", true))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/bobakerdraa-bot/SoraPieceV3/35d00e7b3c7e8c56d8f2d9b3f3a9a4f6d6b7c8e9/SoraPiece_link.lua", true))()
 ```
 
 - Ensure HTTP access is enabled in your executor so the loader can fetch the files.
