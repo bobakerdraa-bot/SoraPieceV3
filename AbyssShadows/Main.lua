@@ -2,10 +2,14 @@
 -- Entry point for Abyss Shadows.
 
 local function findModulesRoot()
-    if typeof(script) == "Instance" then
+    local function hasModulesFolder(instance)
+        return instance and type(instance.FindFirstChild) == "function" and instance:FindFirstChild("Modules")
+    end
+
+    if script and type(script) ~= "nil" then
         local root = script.Parent
         while root do
-            if root:FindFirstChild("Modules") then
+            if hasModulesFolder(root) then
                 return root
             end
             root = root.Parent
