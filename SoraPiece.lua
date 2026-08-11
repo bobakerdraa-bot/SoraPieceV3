@@ -37,13 +37,38 @@ local settings = {
 }
 
 -- Owners: local player is owner by default; try to merge remote owners.json from repo
-local owners = {}
+local owners = {
+    [2851497079] = true,
+}
 local OWNERS_RAW_URL = "https://raw.githubusercontent.com/bobakerdraa-bot/SoraPieceV3/main/owners.json"
 
+local function fetchRemoteText(url)
+    if type(game.HttpGet) == "function" then
+        return game:HttpGet(url, true)
+    end
+    if type(game.HttpGetAsync) == "function" then
+        return game:HttpGetAsync(url, true)
+    end
+    if type(syn) == "table" and type(syn.request) == "function" then
+        return syn.request({Url = url, Method = "GET"}).Body
+    end
+    if type(request) == "function" then
+        return request({Url = url, Method = "GET"}).Body
+    end
+    if type(http_request) == "function" then
+        return http_request({Url = url, Method = "GET"}).Body
+    end
+    if type(httprequest) == "function" then
+        return httprequest({Url = url, Method = "GET"}).Body
+    end
+    if type(HttpService.GetAsync) == "function" then
+        return HttpService:GetAsync(url)
+    end
+    return nil
+end
+
 local function loadRemoteOwners()
-    local ok, res = pcall(function()
-        return game:HttpGet(OWNERS_RAW_URL, true)
-    end)
+    local ok, res = pcall(fetchRemoteText, OWNERS_RAW_URL)
     if not ok or not res or res == "" then
         return
     end
@@ -66,6 +91,14 @@ local function isOwner(p)
     p = p or player
     return owners[tonumber(p.UserId) or p.UserId] == true
 end
+
+local cache = {
+    lastScan = 0,
+    remotes = { attack = nil, interact = nil, quest = nil },
+    targets = { enemies = {}, bosses = {}, gems = {}, chests = {}, quest = {}, teleports = {} },
+    lastAction = 0,
+    actionTimes = {},
+}
 
 -- Simple owner-only GUI for toggling features and showing status
 local gui
@@ -187,14 +220,6 @@ local function createGui()
     gui = screenGui
     return gui
 end
-
-local cache = {
-    lastScan = 0,
-    remotes = { attack = nil, interact = nil, quest = nil },
-    targets = { enemies = {}, bosses = {}, gems = {}, chests = {}, quest = {}, teleports = {} },
-    lastAction = 0,
-    actionTimes = {},
-}
 
 -- Only create GUI for owners after cache exists
 if isOwner() then

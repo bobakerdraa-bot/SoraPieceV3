@@ -1,1 +1,29 @@
-﻿loadstring(game:HttpGet("https://raw.githubusercontent.com/bobakerdraa-bot/SoraPieceV2/main/SoraPiece.lua"))()
+﻿local url = "https://raw.githubusercontent.com/bobakerdraa-bot/SoraPieceV3/main/SoraPiece.lua"
+local function httpGet(u)
+    if type(game.HttpGet) == "function" then
+        return game:HttpGet(u, true)
+    end
+    if type(game.HttpGetAsync) == "function" then
+        return game:HttpGetAsync(u, true)
+    end
+    if type(syn) == "table" and type(syn.request) == "function" then
+        return syn.request({Url = u, Method = "GET"}).Body
+    end
+    if type(request) == "function" then
+        return request({Url = u, Method = "GET"}).Body
+    end
+    if type(http_request) == "function" then
+        return http_request({Url = u, Method = "GET"}).Body
+    end
+    if type(httprequest) == "function" then
+        return httprequest({Url = u, Method = "GET"}).Body
+    end
+    error("No supported HTTP request function found")
+end
+
+local source = httpGet(url)
+local fn = (type(loadstring) == "function" and loadstring or load)(source)
+if not fn then
+    error("Failed to compile remote script")
+end
+fn()
