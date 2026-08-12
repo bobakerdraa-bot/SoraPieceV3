@@ -6,13 +6,40 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
-local DataManager = require(script.Parent.DataManager)
+local DataManager = nil
+local function loadDataManagerSafe()
+    local ok, result = pcall(function()
+        return require(script.Parent.DataManager)
+    end)
+    if not ok or type(result) ~= "table" then
+        return nil
+    end
+    if type(result.State) ~= "table" or type(result.UpdateStat) ~= "function" then
+        return nil
+    end
+    pcall(function()
+        if type(result.EnsureState) == "function" then
+            result:EnsureState()
+        end
+    end)
+    return result
+end
+DataManager = loadDataManagerSafe()
 
 local Scanner = {}
 Scanner.NPCCache = {}
 Scanner.ChestCache = {}
 Scanner.GemCache = {}
 Scanner.Connections = {}
+
+local function updateState(key, value)
+    if not DataManager or type(DataManager.UpdateStat) ~= "function" then
+        return
+    end
+    pcall(function()
+        DataManager:UpdateStat(key, value)
+    end)
+end
 
 local function gatherNpcInfo(model)
     if not model or not model:IsA("Model") then
@@ -65,7 +92,15 @@ function Scanner:ScanNpcs()
             table.insert(self.NPCCache, info)
         end
     end
-    DataManager:Log("ScanNpcs found", #self.NPCCache, "NPCs")
+    if DataManager and type(DataManager.Log) == "function" then
+        pcall(function()
+            DataManager:Log("ScanNpcs found", #self.NPCCache, "NPCs")
+        end)
+    end
+    updateState("CurrentLocation", "Unknown")
+    updateState("Status", "NPC scan complete")
+    updateState("CurrentTargetName", "None")
+    updateState("CurrentTargetHealth", 0)
     return self.NPCCache
 end
 
@@ -81,7 +116,13 @@ function Scanner:ScanChests()
     for _, chest in ipairs(candidates) do
         table.insert(self.ChestCache, chest)
     end
-    DataManager:Log("ScanChests found", #self.ChestCache, "chests")
+    if DataManager and type(DataManager.Log) == "function" then
+        pcall(function()
+            DataManager:Log("ScanChests found", #self.ChestCache, "chests")
+        end)
+    end
+    updateState("Status", "Chest scan complete")
+    updateState("ChestTarget", #self.ChestCache > 0 and tostring(#self.ChestCache) or "None")
     return self.ChestCache
 end
 
@@ -97,7 +138,14 @@ function Scanner:ScanGems()
     for _, gem in ipairs(candidates) do
         table.insert(self.GemCache, gem)
     end
-    DataManager:Log("ScanGems found", #self.GemCache, "gems")
+    if DataManager and type(DataManager.Log) == "function" then
+        pcall(function()
+            DataManager:Log("ScanGems found", #self.GemCache, "gems")
+        end)
+    end
+    updateState("SessionGems", #self.GemCache)
+    updateState("GemsPerMinute", 0)
+    updateState("Status", "Gem scan complete")
     return self.GemCache
 end
 

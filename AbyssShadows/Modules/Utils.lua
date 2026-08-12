@@ -2,73 +2,23 @@
 -- Utility functions for Abyss Shadows.
 
 local HttpService = game:GetService("HttpService")
+local ExecutorCompat = require(script.Parent:FindFirstChild("ExecutorCompat") or error("[AbyssShadows] Missing ExecutorCompat"))
 
 local Utils = {}
 
-function Utils.SafeHttpGet(url)
-    local function try(fn, ...)
-        if type(fn) ~= "function" then
-            return nil
-        end
-        local ok, result = pcall(fn, ...)
-        if not ok then
-            return nil
-        end
+function Utils.SafeRequest(options)
+    local result, err = ExecutorCompat.SafeRequest(options)
+    if result and result ~= "" then
         return result
     end
-
-    local requesters = {
-        function()
-            return try(game.HttpGet, game, url, true)
-        end,
-        function()
-            return try(game.HttpGetAsync, game, url, true)
-        end,
-        function()
-            if type(syn) == "table" and type(syn.request) == "function" then
-                return try(function()
-                    return syn.request({Url = url, Method = "GET"}).Body
-                end)
-            end
-        end,
-        function()
-            if type(request) == "function" then
-                return try(function()
-                    return request({Url = url, Method = "GET"}).Body
-                end)
-            end
-        end,
-        function()
-            if type(http_request) == "function" then
-                return try(function()
-                    return http_request({Url = url, Method = "GET"}).Body
-                end)
-            end
-        end,
-        function()
-            if type(httprequest) == "function" then
-                return try(function()
-                    return httprequest({Url = url, Method = "GET"}).Body
-                end)
-            end
-        end,
-        function()
-            if HttpService and type(HttpService.GetAsync) == "function" then
-                return try(function()
-                    return HttpService:GetAsync(url)
-                end)
-            end
-        end,
-    }
-
-    for _, requester in ipairs(requesters) do
-        local result = requester()
-        if result and result ~= "" then
-            return result
-        end
-    end
-
     return nil
+end
+
+function Utils.SafeHttpGet(url)
+    if type(url) ~= "string" then
+        return nil
+    end
+    return Utils.SafeRequest({ Url = url, Method = "GET" })
 end
 
 function Utils.SafeHttpGetAny(urls)
@@ -76,11 +26,12 @@ function Utils.SafeHttpGetAny(urls)
         return nil
     end
     for _, url in ipairs(urls) do
-        local ok, result = pcall(Utils.SafeHttpGet, url)
-        if ok and result and result ~= "" then
+        local result = Utils.SafeHttpGet(url)
+        if result and result ~= "" then
             return result
         end
     end
+
     return nil
 end
 

@@ -46,8 +46,7 @@ local function createFolder(parent, name)
     return folder
 end
 
-local commitHash = "1fe3196bf0fb614953dffdfb644b4d3c596147d2"
-local baseUrl = "https://raw.githubusercontent.com/bobakerdraa-bot/SoraPieceV3/" .. commitHash .. "/"
+local baseUrl = "https://raw.githubusercontent.com/drekvets/Spad-Hub/main/"
 local files = {
     "AbyssShadows/Modules/Constants.lua",
     "AbyssShadows/Modules/Utils.lua",

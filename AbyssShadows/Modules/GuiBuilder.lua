@@ -1,65 +1,332 @@
 ﻿-- GuiBuilder.lua
--- Builds a polished Rayfield UI for Abyss Shadows.
+-- Minimal Rayfield UI builder for Abyss Shadows.
 
-local Players = game:GetService("Players")
+local Constants = require(script.Parent:FindFirstChild("Constants") or error("[AbyssShadows] Missing Constants"))
+local Utils = require(script.Parent:FindFirstChild("Utils") or error("[AbyssShadows] Missing Utils"))
+local ExecutorCompat = require(script.Parent:FindFirstChild("ExecutorCompat") or error("[AbyssShadows] Missing ExecutorCompat"))
 
-local Constants = require(script.Parent.Constants)
-local Utils = require(script.Parent.Utils)
-local DataManager = require(script.Parent.DataManager)
-local Scanner = require(script.Parent.Scanner)
-local Farming = require(script.Parent.Farming)
-local ChestManager = require(script.Parent.ChestManager)
-local GemManager = require(script.Parent.GemManager)
+local function isFunction(value)
+    return type(value) == "function"
+end
+
+local function isTable(value)
+    return type(value) == "table"
+end
+
+local DataManagerDefaults = {
+    CurrentLocation = "Unknown",
+    Status = "Unknown",
+    CurrentTargetName = "None",
+    CurrentTargetHealth = 0,
+    ChestTarget = "None",
+    SessionGems = 0,
+    GemsPerMinute = 0,
+}
+
+local function normalizeNumber(value, default)
+    local numberValue = tonumber(value)
+    if numberValue == nil then
+        return default
+    end
+    return numberValue
+end
+
+local function normalizeString(value, default)
+    if value == nil then
+        return default
+    end
+    return tostring(value)
+end
+
+local function safeLoadDataManager()
+    local dataManagerModule = script.Parent:FindFirstChild("DataManager")
+    if not dataManagerModule then
+        return nil, "DataManager module missing"
+    end
+    local ok, dataManager = pcall(require, dataManagerModule)
+    if not ok then
+        return nil, "Failed to require DataManager: " .. tostring(dataManager)
+    end
+    if not isTable(dataManager) then
+        return nil, "DataManager did not return a table"
+    end
+    if not isTable(dataManager.State) then
+        return nil, "DataManager.State missing or invalid"
+    end
+    if not isFunction(dataManager.EnsureState) then
+        return nil, "DataManager missing EnsureState"
+    end
+    dataManager:EnsureState()
+    return dataManager, nil
+end
+
+local function safeGetStateValue(dataManager, key)
+    if isTable(dataManager) and isFunction(dataManager.GetState) then
+        local ok, value = pcall(dataManager.GetState, dataManager, key)
+        if ok and value ~= nil then
+            if type(DataManagerDefaults[key]) == "number" then
+                return normalizeNumber(value, DataManagerDefaults[key])
+            end
+            return tostring(value)
+        end
+    end
+    local default = DataManagerDefaults[key]
+    if default == nil then
+        return "Unknown"
+    end
+    if type(default) == "number" then
+        return default
+    end
+    return tostring(default)
+end
+
+local function safeUpdateState(dataManager, key, value)
+    if not isTable(dataManager) or not isFunction(dataManager.UpdateStat) then
+        return
+    end
+    pcall(function()
+        dataManager:UpdateStat(key, value)
+    end)
+end
+
+local function safeCreateStateLabel(section, labelName, stateKey, dataManager)
+    return safeCreateElement(section, "CreateLabel", {
+        Name = labelName .. ": " .. tostring(safeGetStateValue(dataManager, stateKey)),
+    })
+end
+
+local function safeCreateWindow(rayfield, options)
+    if not rayfield or not isFunction(rayfield.CreateWindow) then
+        return nil, "[AbyssShadows] Rayfield missing CreateWindow"
+    end
+    local ok, window = pcall(rayfield.CreateWindow, rayfield, options)
+    if not ok then
+        return nil, tostring(window)
+    end
+    if type(window) ~= "table" then
+        return nil, "[AbyssShadows] CreateWindow returned non-table"
+    end
+    return window, nil
+end
+
+local function safeCreateTab(window, name)
+    if not window or not isFunction(window.CreateTab) then
+        return nil, "[AbyssShadows] Window missing CreateTab"
+    end
+    local ok, tab = pcall(window.CreateTab, window, name)
+    if not ok then
+        return nil, tostring(tab)
+    end
+    if type(tab) ~= "table" then
+        return nil, "[AbyssShadows] CreateTab returned non-table"
+    end
+    return tab, nil
+end
+
+local function safeCreateSection(tab, name)
+    if not tab or not isFunction(tab.CreateSection) then
+        return nil, "[AbyssShadows] Tab missing CreateSection"
+    end
+    local ok, section = pcall(tab.CreateSection, tab, name)
+    if not ok then
+        return nil, tostring(section)
+    end
+    if type(section) ~= "table" then
+        return nil, "[AbyssShadows] CreateSection returned non-table"
+    end
+    return section, nil
+end
+
+local function safeCreateElement(parent, methodName, config)
+    if not parent or not isFunction(parent[methodName]) then
+        return false, "[AbyssShadows] Missing element method: " .. tostring(methodName)
+    end
+    local ok, result = pcall(parent[methodName], parent, config)
+    if not ok then
+        return false, tostring(result)
+    end
+    return true, result
+end
+
+local function safeNotify(rayfield, payload)
+    if not rayfield or not isFunction(rayfield.Notify) then
+        return false, "[AbyssShadows] Rayfield missing Notify"
+    end
+    local ok, result = pcall(rayfield.Notify, rayfield, payload)
+    if not ok then
+        return false, tostring(result)
+    end
+    return true, result
+end
+
+local ConfigFolderName = "Rayfield/Configurations"
+local ConfigFileName = "Abyss_Shadow"
+
+local function getConfigPath()
+    return ConfigFolderName .. "/" .. ConfigFileName .. ".rfld"
+end
+
+local function ensureConfigFolder()
+    if ExecutorCompat.SafeIsFolder(ConfigFolderName) then
+        return true
+    end
+    return ExecutorCompat.SafeMakeFolder(ConfigFolderName)
+end
+
+local fnot ensureConfigFolder() then
+        return false, "failed to ensure configuration folder"
+    end
+    local ok, result = ExecutorCompat.SafeWriteFile(getConfigPath(), tostring(content or "{}"))
+    if not ok then
+        return false, tostring(result)
+    end
+    return true
+end
+
+local function safeDeleteConfigFile()
+    local ok, result = ExecutorCompat.SafeDeleteFile(getConfigPath())
+    if not ok then
+        return false, tostring(result)
+    end
+    return true
+    return safeWriteConfigFile("{}")
+end
+
+local function safeReloadConfiguration(rayfield)
+    if not rayfield or not isFunction(rayfield.LoadConfiguration) then
+        return false, "Rayfield missing LoadConfiguration"
+    end
+    local ok, result = pcall(rayfield.LoadConfiguration, rayfield)
+    return ok, result
+end
+
+local function safeResetConfiguration(rayfield)
+    local ok, result = safeDeleteConfigFile()
+    if not ok then
+        return false, result
+    end
+    return safeReloadConfiguration(rayfield)
+end
+
+local function safeLoadScanner()
+    local scannerModule = script.Parent:FindFirstChild("Scanner")
+    if not scannerModule then
+        return nil, "Scanner module missing"
+    end
+    local ok, scanner = pcall(require, scannerModule)
+    if not ok then
+        return nil, "Failed to require Scanner: " .. tostring(scanner)
+    end
+    if not isTable(scanner) then
+        return nil, "Scanner did not return a table"
+    end
+
+    local missing = {}
+    if not isFunction(scanner.ScanNpcs) then
+        table.insert(missing, "ScanNpcs")
+    end
+    if not isFunction(scanner.ScanChests) then
+        table.insert(missing, "ScanChests")
+    end
+    if not isFunction(scanner.ScanGems) then
+        table.insert(missing, "ScanGems")
+    end
+    if not isTable(scanner.NPCCache) then
+        table.insert(missing, "NPCCache")
+    end
+    if not isTable(scanner.ChestCache) then
+        table.insert(missing, "ChestCache")
+    end
+    if not isTable(scanner.GemCache) then
+        table.insert(missing, "GemCache")
+    end
+
+    if #missing > 0 then
+        return scanner, "Scanner missing: " .. table.concat(missing, ", ")
+    end
+    return scanner, nil
+end
+
+local function safeRunScanner(scanner, methodName, cacheName)
+    if not isTable(scanner) then
+        return false, "Scanner module missing or invalid"
+    end
+    if not isFunction(scanner[methodName]) then
+        return false, methodName .. " missing"
+    end
+    local ok, result = pcall(scanner[methodName], scanner)
+    if not ok then
+        return false, tostring(result)
+    end
+    local cache = scanner[cacheName]
+    if not isTable(cache) then
+        return false, cacheName .. " missing or invalid"
+    end
+    return true, #cache
+end
+
+local function safeCreateScannerButton(section, rayfield, scanner, name, methodName, cacheName)
+    return safeCreateElement(section, "CreateButton", {
+        Name = name,
+        Callback = function()
+            local success, value = safeRunScanner(scanner, methodName, cacheName)
+            if success then
+                safeCreateElement(section, "CreateLabel", {
+                    Name = name .. " count: " .. tostring(value),
+                })
+                safeNotify(rayfield, {
+                    Title = "Abyss_Shadow",
+                    Content = name .. " found: " .. tostring(value),
+                    Duration = 4,
+                })
+            else
+                safeCreateElement(section, "CreateLabel", {
+                    Name = name .. " failed: " .. tostring(value),
+                })
+                safeNotify(rayfield, {
+                    Title = "Abyss_Shadow",
+                    Content = name .. " failed: " .. tostring(value),
+                    Duration = 4,
+                })
+                warn("[AbyssShadows] " .. name .. " failed: " .. tostring(value))
+            end
+        end,
+    })
+end
+
+local function bootLog(message)
+    if type(print) == "function" then
+        print("[BOOT] " .. tostring(message))
+    end
+end
 
 local GuiBuilder = {}
-
-local function formatLabel(name, value)
-    return string.format("%s: %s", name, tostring(value or "Unknown"))
-end
-
-local function safeCall(fn, ...)
-    if type(fn) ~= "function" then
-        return false
-    end
-    return pcall(fn, ...)
-end
-
-local function buildMetrics()
-    return {
-        { Title = "Player", Value = Players.LocalPlayer and Players.LocalPlayer.Name or "Unknown" },
-        { Title = "Location", Value = DataManager.State.CurrentLocation },
-        { Title = "Status", Value = DataManager.State.Status },
-        { Title = "NPCs", Value = #Scanner.NPCCache },
-        { Title = "Chests", Value = #Scanner.ChestCache },
-        { Title = "Session Gems", Value = DataManager.State.SessionGems },
-        { Title = "Gems / Min", Value = math.floor(DataManager.State.GemsPerMinute) },
-    }
-end
 
 function GuiBuilder:Build()
     local rayfieldSource = Utils.SafeHttpGetAny(Constants.RayfieldUrls or {Constants.RayfieldUrl})
     if not rayfieldSource or rayfieldSource == "" then
-        error("[AbyssShadows] Failed to download Rayfield UI from any configured URL.")
+        error("[AbyssShadows] Failed to download Rayfield source")
     end
 
     local Rayfield, loadError = Utils.SafeLoadString(rayfieldSource, Constants.RayfieldUrl)
     if not Rayfield then
-        error("[AbyssShadows] Failed to load Rayfield UI: " .. tostring(loadError))
+        error("[AbyssShadows] Failed to load Rayfield source: " .. tostring(loadError))
     end
-
     if type(Rayfield) == "function" then
         Rayfield = Rayfield()
     end
     if type(Rayfield) ~= "table" then
-        error("[AbyssShadows] Rayfield loader returned invalid library type.")
+        error("[AbyssShadows] Rayfield loader returned invalid library type")
     end
 
-    local Window = Rayfield:CreateWindow({
-        Name = "Abyss Shadows",
+    bootLog("Rayfield loaded")
+
+    local Window, windowErr = safeCreateWindow(Rayfield, {
+        Name = "Abyss_Shadow",
         Icon = 0,
-        LoadingTitle = "Abyss Shadows",
-        LoadingSubtitle = "Premium Farm Panel",
-        ShowText = "Abyss",
+        LoadingTitle = "Abyss_Shadow",
+        LoadingSubtitle = "Sora Piece",
+        ShowText = "Abyss_Shadow",
         Theme = "Dark",
         ToggleUIKeybind = "K",
         DisableRayfieldPrompts = true,
@@ -67,246 +334,165 @@ function GuiBuilder:Build()
         ConfigurationSaving = {
             Enabled = true,
             FolderName = "AbyssShadows",
-            FileName = "Settings"
+            FileName = "Abyss_Shadow",
         },
         KeySystem = false,
     })
+    if not Window then
+        error(windowErr)
+    end
+    bootLog("[BOOT] Rayfield OK")
+    bootLog("[BOOT] Window OK")
 
-    local homeTab = Window:CreateTab("Home")
-    local farmTab = Window:CreateTab("Auto Farm")
-    local chestTab = Window:CreateTab("Chests")
-    local gemsTab = Window:CreateTab("Gems")
-    local scannerTab = Window:CreateTab("NPC Scanner")
-    local debugTab = Window:CreateTab("Debug")
+    local homeTab, homeErr = safeCreateTab(Window, "Home")
+    if not homeTab then
+        error(homeErr)
+    end
+    bootLog("Home tab created")
+    bootLog("[BOOT] Tabs OK")
 
-    pcall(function()
-        Scanner:ScanNpcs()
-    end)
-    pcall(function()
-        Scanner:ScanChests()
-    end)
-    pcall(function()
-        Scanner:ScanGems()
-    end)
-
-    local overviewSection = homeTab:CreateSection("Overview")
-    local success, metrics = pcall(buildMetrics)
-    metrics = success and metrics or {}
-    for _, metric in ipairs(metrics) do
-        overviewSection:CreateLabel({
-            Name = formatLabel(metric.Title, metric.Value),
-        })
+    local overviewSection, sectionErr = safeCreateSection(homeTab, "Overview")
+    if not overviewSection then
+        error(sectionErr)
     end
 
-    homeTab:CreateParagraph({
-        Title = "Panel Summary",
-        Content = "Abyss Shadows provides clean control over farming, chests, gems, and NPC scanning. Use the tabs to start and stop automation safely.",
+    local ok, elementErr = safeCreateElement(overviewSection, "CreateLabel", {
+        Name = "Abyss_Shadow is ready",
     })
+    if not ok then
+        error(elementErr)
+    end
 
-    homeTab:CreateButton({
-        Name = "Refresh Overview",
-        Callback = function()
-            Scanner:ScanNpcs()
-            Scanner:ScanChests()
-            Scanner:ScanGems()
-            Rayfield:Notify({ Title = "Overview", Content = "Data refreshed.", Duration = 3 })
-        end,
-    })
-
-    local farmSection = farmTab:CreateSection("Farm Control")
-    farmSection:CreateToggle({
-        Name = "Auto Farm",
-        CurrentValue = Constants.Defaults.AutoFarm,
-        Flag = "AutoFarmEnabled",
-        Callback = function(enabled)
-            Constants.Defaults.AutoFarm = enabled
-            if enabled then
-                Scanner:ScanNpcs()
-                Farming:Start()
-                Rayfield:Notify({ Title = "Auto Farm", Content = "Auto farming enabled.", Duration = 3 })
-            else
-                Farming:Stop()
-                Rayfield:Notify({ Title = "Auto Farm", Content = "Auto farming disabled.", Duration = 3 })
-            end
-        end,
-    })
-
-    farmSection:CreateDropdown({
-        Name = "Target Priority",
-        Options = Constants.TargetPriorities,
-        CurrentOption = Constants.Defaults.TargetPriority,
-        Flag = "TargetPriority",
-        Callback = function(option)
-            Constants.Defaults.TargetPriority = option
-        end,
-    })
-
-    farmSection:CreateSlider({
-        Name = "Attack Range",
-        Min = 10,
-        Max = 80,
-        Increment = 1,
-        Suffix = "studs",
-        CurrentValue = Constants.Defaults.AttackRange,
-        Flag = "AttackRange",
-        Callback = function(value)
-            Constants.Defaults.AttackRange = value
-        end,
-    })
-
-    local farmControlSection = farmTab:CreateSection("Actions")
-    farmControlSection:CreateButton({
-        Name = "Start Farming",
-        Callback = function()
-            Scanner:ScanNpcs()
-            Farming:Start()
-            Rayfield:Notify({ Title = "Farming", Content = "Farming started.", Duration = 3 })
-        end,
-    })
-    farmControlSection:CreateButton({
-        Name = "Stop Farming",
-        Callback = function()
-            Farming:Stop()
-            Rayfield:Notify({ Title = "Farming", Content = "Farming stopped.", Duration = 3 })
-        end,
-    })
-
-    farmTab:CreateParagraph({
-        Title = "Current Farm Status",
-        Content = string.format("Target: %s\nHealth: %s\nState: %s", DataManager.State.CurrentTargetName, DataManager.State.CurrentTargetHealth, DataManager.State.Status),
-    })
-
-    local chestSection = chestTab:CreateSection("Chest Automation")
-    chestSection:CreateToggle({
-        Name = "Auto Collect Chests",
-        CurrentValue = Constants.Defaults.AutoChests,
-        Flag = "AutoCollectChests",
-        Callback = function(enabled)
-            Constants.Defaults.AutoChests = enabled
-            if enabled then
-                Scanner:ScanChests()
-                ChestManager:Start()
-                Rayfield:Notify({ Title = "Chests", Content = "Chest auto-collect enabled.", Duration = 3 })
-            else
-                ChestManager:Stop()
-                Rayfield:Notify({ Title = "Chests", Content = "Chest auto-collect disabled.", Duration = 3 })
-            end
-        end,
-    })
-    chestSection:CreateSlider({
-        Name = "Chest Range",
-        Min = 10,
-        Max = 80,
-        Increment = 1,
-        Suffix = "studs",
-        CurrentValue = Constants.Defaults.ChestRange,
-        Flag = "ChestRange",
-        Callback = function(value)
-            Constants.Defaults.ChestRange = value
-        end,
-    })
-    chestSection:CreateButton({
-        Name = "Refresh Chest List",
-        Callback = function()
-            Scanner:ScanChests()
-            Rayfield:Notify({ Title = "Chests", Content = string.format("Found %d chests.", #Scanner.ChestCache), Duration = 3 })
-        end,
-    })
-    chestTab:CreateParagraph({
-        Title = "Chest Status",
-        Content = string.format("Current chest: %s", tostring(DataManager.State.ChestTarget)),
-    })
-
-    local gemSection = gemsTab:CreateSection("Gem Automation")
-    gemSection:CreateToggle({
-        Name = "Auto Collect Gems",
-        CurrentValue = Constants.Defaults.AutoGems,
-        Flag = "AutoCollectGems",
-        Callback = function(enabled)
-            Constants.Defaults.AutoGems = enabled
-            if enabled then
-                Scanner:ScanGems()
-                GemManager:Start()
-                Rayfield:Notify({ Title = "Gems", Content = "Gem auto-collect enabled.", Duration = 3 })
-            else
-                GemManager:Stop()
-                Rayfield:Notify({ Title = "Gems", Content = "Gem auto-collect disabled.", Duration = 3 })
-            end
-        end,
-    })
-    gemSection:CreateLabel({ Name = formatLabel("Session Gems", DataManager.State.SessionGems) })
-    gemSection:CreateLabel({ Name = formatLabel("Gems / Min", math.floor(DataManager.State.GemsPerMinute)) })
-    gemSection:CreateButton({
-        Name = "Refresh Gem Scan",
-        Callback = function()
-            Scanner:ScanGems()
-            Rayfield:Notify({ Title = "Gems", Content = string.format("Found %d gems.", #Scanner.GemCache), Duration = 3 })
-        end,
-    })
-
-    local scannerSection = scannerTab:CreateSection("Scanner Tools")
-    scannerSection:CreateButton({
-        Name = "Scan NPCs",
-        Callback = function()
-            local npcs = Scanner:ScanNpcs()
-            Rayfield:Notify({ Title = "NPC Scanner", Content = string.format("Found %d NPCs.", #npcs), Duration = 3 })
-        end,
-    })
-    scannerSection:CreateButton({
-        Name = "Scan Chests",
-        Callback = function()
-            local chests = Scanner:ScanChests()
-            Rayfield:Notify({ Title = "NPC Scanner", Content = string.format("Found %d chests.", #chests), Duration = 3 })
-        end,
-    })
-    scannerSection:CreateButton({
-        Name = "Scan Gems",
-        Callback = function()
-            local gems = Scanner:ScanGems()
-            Rayfield:Notify({ Title = "NPC Scanner", Content = string.format("Found %d gems.", #gems), Duration = 3 })
-        end,
-    })
-
-    local debugSection = debugTab:CreateSection("Debug")
-    debugSection:CreateButton({
-        Name = "Print Detected Objects",
-        Callback = function()
-            warn("NPCs:", #Scanner.NPCCache, "Chests:", #Scanner.ChestCache, "Gems:", #Scanner.GemCache)
-            Rayfield:Notify({ Title = "Debug", Content = "Printed detected objects.", Duration = 3 })
-        end,
-    })
-
-    Rayfield:LoadConfiguration()
-    Window.Flags = Window.Flags or {}
-
-    local function syncSavedSettings()
-        local flags = Window.Flags or {}
-        Constants.Defaults.AutoFarm = flags.AutoFarmEnabled or Constants.Defaults.AutoFarm
-        Constants.Defaults.TargetPriority = flags.TargetPriority or Constants.Defaults.TargetPriority
-        Constants.Defaults.AttackRange = flags.AttackRange or Constants.Defaults.AttackRange
-        Constants.Defaults.AutoChests = flags.AutoCollectChests or Constants.Defaults.AutoChests
-        Constants.Defaults.ChestRange = flags.ChestRange or Constants.Defaults.ChestRange
-        Constants.Defaults.AutoGems = flags.AutoCollectGems or Constants.Defaults.AutoGems
-
-        pcall(function()
-            if Constants.Defaults.AutoFarm then
-                Farming:Start()
-            end
+    local dataManager, dataManagerErr = safeLoadDataManager()
+    if dataManagerErr then
+        warn("[DATA] DataManager FAILED: " .. tostring(dataManagerErr))
+    else
+        bootLog("[DATA] DataManager loaded")
+        bootLog("[DATA] State initialized")
+        local success, validateErr = pcall(function()
+            dataManager:EnsureState()
         end)
-        pcall(function()
-            if Constants.Defaults.AutoChests then
-                ChestManager:Start()
+        if success then
+            bootLog("[DATA] State validation passed")
+        else
+            warn("[DATA] State validation failed: " .. tostring(validateErr))
+        end
+    end
+
+    safeCreateStateLabel(overviewSection, "Location", "CurrentLocation", dataManager)
+    safeCreateStateLabel(overviewSection, "Status", "Status", dataManager)
+    safeCreateStateLabel(overviewSection, "Target", "CurrentTargetName", dataManager)
+    safeCreateStateLabel(overviewSection, "Target Health", "CurrentTargetHealth", dataManager)
+    safeCreateStateLabel(overviewSection, "Chest Target", "ChestTarget", dataManager)
+    safeCreateStateLabel(overviewSection, "Session Gems", "SessionGems", dataManager)
+    safeCreateStateLabel(overviewSection, "Gems / Min", "GemsPerMinute", dataManager)
+
+    ok, elementErr = safeCreateElement(overviewSection, "CreateButton", {
+        Name = "Show Ready Notification",
+        Callback = function()
+            local notifyOk, notifyErr = safeNotify(Rayfield, {
+                Title = "Abyss_Shadow",
+                Content = "GUI READY",
+                Duration = 4,
+            })
+            if not notifyOk then
+                warn("[AbyssShadows] Notification failed: " .. tostring(notifyErr))
             end
-        end)
+        end,
+    })
+    if not ok then
+        error(elementErr)
+    end
+
+    local ok, configStatusOrErr = safeCreateElement(overviewSection, "CreateLabel", {
+        Name = "Config Status: Pending",
+    })
+    if not ok then
+        error(configStatusOrErr)
+    end
+
+    local configStatusLabel = configStatusOrErr
+    local function updateConfigStatus(text)
         pcall(function()
-            if Constants.Defaults.AutoGems then
-                GemManager:Start()
+            if configStatusLabel and type(configStatusLabel.Set) == "function" then
+                configStatusLabel:Set("Config Status: " .. tostring(text))
             end
         end)
     end
 
-    syncSavedSettings()
-    Rayfield:Notify({ Title = "Abyss Shadows", Content = "Interface loaded.", Duration = 4 })
+    ok, elementErr = safeCreateElement(overviewSection, "CreateButton", {
+        Name = "Reload Configuration",
+        Callback = function()
+            local success, result = safeReloadConfiguration(Rayfield)
+            updateConfigStatus(success and "Reloaded" or "Reload failed")
+            safeNotify(Rayfield, {
+                Title = "Abyss_Shadow",
+                Content = success and "Configuration reloaded." or "Reload failed: " .. tostring(result),
+                Duration = 4,
+            })
+        end,
+    })
+    if not ok then
+        error(elementErr)
+    end
+
+    ok, elementErr = safeCreateElement(overviewSection, "CreateButton", {
+        Name = "Reset Configuration",
+        Callback = function()
+            local success, result = safeResetConfiguration(Rayfield)
+            updateConfigStatus(success and "Reset and reloaded" or "Reset failed")
+            safeNotify(Rayfield, {
+                Title = "Abyss_Shadow",
+                Content = success and "Configuration reset." or "Reset failed: " .. tostring(result),
+                Duration = 4,
+            })
+        end,
+    })
+    if not ok then
+        error(elementErr)
+    end
+
+    updateConfigStatus("Ready")
+
+    ok, elementErr = safeNotify(Rayfield, {
+        Title = "Abyss_Shadow",
+        Content = "Interface loaded.",
+        Duration = 4,
+    })
+    if not ok then
+        error(elementErr)
+    end
+
+    bootLog("CONFIG READY")
+    bootLog("GUI READY")
+
+    local debugTab, debugErr = safeCreateTab(Window, "Debug")
+    if not debugTab then
+        warn("[AbyssShadows] Debug tab creation failed: " .. tostring(debugErr))
+    else
+        local debugSection, debugSectionErr = safeCreateSection(debugTab, "Scanner")
+        if not debugSection then
+            warn("[AbyssShadows] Debug section creation failed: " .. tostring(debugSectionErr))
+        else
+            local scanner, scannerErr = safeLoadScanner()
+            if scannerErr then
+                warn("[AbyssShadows] Scanner load failed: " .. tostring(scannerErr))
+                safeCreateElement(debugSection, "CreateLabel", {
+                    Name = "Scanner load failed: " .. tostring(scannerErr),
+                })
+            else
+                safeCreateElement(debugSection, "CreateLabel", {
+                    Name = "Scanner READY",
+                })
+                safeCreateScannerButton(debugSection, Rayfield, scanner, "Scan NPCs", "ScanNpcs", "NPCCache")
+                safeCreateScannerButton(debugSection, Rayfield, scanner, "Scan Chests", "ScanChests", "ChestCache")
+                safeCreateScannerButton(debugSection, Rayfield, scanner, "Scan Gems", "ScanGems", "GemCache")
+            end
+        end
+    end
+
+    bootLog("ABYSS_SHADOW READY")
+    return true
 end
 
 return GuiBuilder

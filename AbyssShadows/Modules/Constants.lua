@@ -3,12 +3,32 @@
 
 local Constants = {}
 
-Constants.RayfieldUrl = "https://sirius.menu/rayfield"
-Constants.RayfieldUrls = {
-    "https://sirius.menu/rayfield",
-    "https://raw.githubusercontent.com/sirius1138/Rayfield/main/source.lua",
-    "https://cdn.jsdelivr.net/gh/sirius1138/Rayfield@main/source.lua",
+Constants.Metadata = {
+    Name = "Abyss_Shadow",
+    Version = "1.0.0",
+    GameName = "Sora Piece",
+    PlaceId = 91356007281562,
+    UpdateSource = {
+        URL = "https://raw.githubusercontent.com/bobakerdraa-bot/SoraPieceV3/main/AbyssShadows/version.txt",
+        Required = false,
+    },
 }
+
+Constants.Dependencies = {
+    Rayfield = {
+        Name = "Rayfield",
+        URL = "https://sirius.menu/rayfield",
+        FallbackUrls = {
+            "https://raw.githubusercontent.com/sirius1138/Rayfield/main/source.lua",
+            "https://cdn.jsdelivr.net/gh/sirius1138/Rayfield@main/source.lua",
+        },
+        Required = true,
+        Fallback = true,
+    },
+}
+
+Constants.RayfieldUrl = Constants.Dependencies.Rayfield.URL
+Constants.RayfieldUrls = { Constants.RayfieldUrl, table.unpack(Constants.Dependencies.Rayfield.FallbackUrls) }
 
 Constants.Defaults = {
     AutoFarm = false,
