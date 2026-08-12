@@ -115,18 +115,57 @@ for _, mod in ipairs(ModulesNeeded) do
             print("[Abyss_Shadow]\nModule: " .. mod.Name .. "\nStatus: SKIPPED\nReason: HTTP fetch failed: " .. tostring(serr))
         end
     else
-        local ok, mres = pcall(function() return compileModule(source, url) end)
-        if not ok or mres == nil then
-            local reason = tostring(mres or "compile/runtime error")
-            if mod.Required then
-                print("[Abyss_Shadow]\nModule: " .. mod.Name .. "\nStatus: FAILED\nReason: " .. reason)
-                error("[BOOT] Required module compile failed: " .. mod.Name .. " -> " .. reason)
+        -- Special, verbose diagnostics for ExecutorCompat to reveal exact errors
+        if mod.Name == "ExecutorCompat" then
+            print("[COMPAT] SOURCE LENGTH: " .. tostring(#source))
+            local loaderfn = loadstring or load
+            if type(loaderfn) ~= "function" then
+                print("[COMPAT] COMPILE: FAIL")
+                print("COMPILE ERROR:\nno loadstring/load available in this executor")
+                if mod.Required then
+                    error("[BOOT] Required module compile failed: " .. mod.Name .. " -> no loadstring/load")
+                end
             else
-                print("[Abyss_Shadow]\nModule: " .. mod.Name .. "\nStatus: FAILED\nReason: " .. reason)
+                local chunk, compileErr = loaderfn(source, url)
+                if not chunk then
+                    print("[COMPAT] COMPILE: FAIL")
+                    print("COMPILE ERROR:\n" .. tostring(compileErr))
+                    if mod.Required then
+                        print("[Abyss_Shadow]\nModule: " .. mod.Name .. "\nStatus: FAILED\nReason:\n" .. tostring(compileErr))
+                        error("[BOOT] Required module compile failed: " .. mod.Name .. " -> " .. tostring(compileErr))
+                    end
+                else
+                    print("[COMPAT] COMPILE: PASS")
+                    local ok, runtimeResult = xpcall(function() return chunk() end, debug and debug.traceback or function(e) return tostring(e) end)
+                    if not ok then
+                        print("[COMPAT] RUNTIME: FAIL")
+                        print("RUNTIME ERROR:\n" .. tostring(runtimeResult))
+                        if mod.Required then
+                            print("[Abyss_Shadow]\nModule: " .. mod.Name .. "\nStatus: FAILED\nReason:\n" .. tostring(runtimeResult))
+                            error("[BOOT] Required module runtime failed: " .. mod.Name .. " -> " .. tostring(runtimeResult))
+                        end
+                    else
+                        print("[COMPAT] RUNTIME: PASS")
+                        loaded[mod.Name] = runtimeResult
+                        print("[COMPAT] MODULE RETURN TYPE: " .. type(runtimeResult))
+                        print("[Abyss_Shadow]\nModule: " .. mod.Name .. "\nStatus: LOADED")
+                    end
+                end
             end
         else
-            loaded[mod.Name] = mres
-            print("[Abyss_Shadow]\nModule: " .. mod.Name .. "\nStatus: LOADED")
+            local ok, mres = pcall(function() return compileModule(source, url) end)
+            if not ok or mres == nil then
+                local reason = tostring(mres or "compile/runtime error")
+                if mod.Required then
+                    print("[Abyss_Shadow]\nModule: " .. mod.Name .. "\nStatus: FAILED\nReason: " .. reason)
+                    error("[BOOT] Required module compile failed: " .. mod.Name .. " -> " .. reason)
+                else
+                    print("[Abyss_Shadow]\nModule: " .. mod.Name .. "\nStatus: FAILED\nReason: " .. reason)
+                end
+            else
+                loaded[mod.Name] = mres
+                print("[Abyss_Shadow]\nModule: " .. mod.Name .. "\nStatus: LOADED")
+            end
         end
     end
 end
