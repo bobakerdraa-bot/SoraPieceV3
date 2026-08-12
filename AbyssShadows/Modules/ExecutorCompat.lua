@@ -37,7 +37,13 @@ local function detectEnvironment()
     return env
 end
 
-local Environment = detectEnvironment()
+local ok_detect, detected = pcall(detectEnvironment)
+local Environment = (ok_detect and type(detected) == "table") and detected or {
+    Name = "Unknown",
+    Exact = false,
+    Xeno = false,
+    ProjectReal = false,
+}
 
 function ExecutorCompat.GetEnvironment()
     return Environment
@@ -179,10 +185,10 @@ function ExecutorCompat.SafeRequest(options)
         end)
     end
 
-    if type(HttpService.GetAsync) == "function" then
-        table.insert(requesters, function()
-            return HttpService:GetAsync(url)
-        end)
+    if HttpService and type(HttpService.GetAsync) == "function" then
+            table.insert(requesters, function()
+                return HttpService:GetAsync(url)
+            end)
     end
 
     for _, requester in ipairs(requesters) do
@@ -250,3 +256,13 @@ function ExecutorCompat.SafeMakeFolder(path)
 end
 
 return ExecutorCompat
+
+-- Diagnostics: safe, minimal load-time reporting
+pcall(function()
+    print("[COMPAT] Module loaded")
+    print("[COMPAT] Executor: " .. tostring(Environment.Name))
+    print("[COMPAT] HTTP: " .. ExecutorCompat.GetHttpStatus())
+    print("[COMPAT] LOADSTRING: " .. ExecutorCompat.GetLoadStringStatus())
+    print("[COMPAT] OTHER REQUIRED CAPABILITIES: " .. ExecutorCompat.GetOtherCapabilitiesSummary())
+    print("[COMPAT] Module READY")
+end)
